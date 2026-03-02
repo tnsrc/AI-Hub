@@ -1,0 +1,41 @@
+appId: gov.fcc.aihub
+productName: FCC AI Hub
+
+directories:
+  output: dist
+
+files:
+  - out/**/*
+  - "!node_modules/**/*"
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.productivity
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Skip electron-builder's signing — we codesign manually after pack
+  identity: null
+
+afterPack: ./scripts/after-pack.js
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true

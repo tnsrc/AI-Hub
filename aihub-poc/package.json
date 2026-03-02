@@ -1,0 +1,33 @@
+{
+  "name": "fcc-ai-hub",
+  "version": "1.0.0",
+  "description": "FCC AI Hub - Unified AI chat desktop application",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "dist": "electron-vite build && electron-builder",
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist:win": "electron-vite build && electron-builder --win",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^3.0.0",
+    "electron-store": "^11.0.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "electron": "^35.0.0",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^3.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
+  }
+}
