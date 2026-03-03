@@ -140,26 +140,42 @@ fn create_provider_webview(
     )
     .on_page_load(move |webview, payload| {
         if payload.event() == PageLoadEvent::Finished {
-            let state = app_handle.state::<AppState>();
-            let mut inner = state.inner.lock().unwrap();
+            // Read and update state, then drop lock BEFORE any webview calls.
+            // On Windows, webview ops dispatch to the UI thread — holding the
+            // mutex here would deadlock with resize events on that thread.
+            let (should_position, should_collapse) = {
+                let state = app_handle.state::<AppState>();
+                let mut inner = state.inner.lock().unwrap();
 
-            // Skip if already recorded as failed
-            if inner.failed_providers.contains_key(&provider_id) {
-                return;
-            }
-
-            inner.loaded_providers.insert(provider_id.clone());
-
-            // Track the actual domain after redirects (e.g. chat.openai.com → chatgpt.com)
-            if let Ok(current_url) = webview.url() {
-                if let Some(host) = current_url.host_str() {
-                    let domain = host.strip_prefix("www.").unwrap_or(host).to_lowercase();
-                    inner.provider_domains.insert(provider_id.clone(), domain);
+                if inner.failed_providers.contains_key(&provider_id) {
+                    return;
                 }
-            }
 
-            // Position the webview on-screen if it's the active provider
-            if inner.active_provider_id.as_ref() == Some(&provider_id) {
+                inner.loaded_providers.insert(provider_id.clone());
+
+                // Track the actual domain after redirects
+                if let Ok(current_url) = webview.url() {
+                    if let Some(host) = current_url.host_str() {
+                        let domain = host.strip_prefix("www.").unwrap_or(host).to_lowercase();
+                        inner.provider_domains.insert(provider_id.clone(), domain);
+                    }
+                }
+
+                let is_active = inner.active_provider_id.as_ref() == Some(&provider_id);
+
+                let was_loading = inner.currently_loading_id.as_ref() == Some(&provider_id);
+                let mut do_collapse = false;
+                if was_loading {
+                    inner.currently_loading_id = None;
+                    inner.shell_expand_count = (inner.shell_expand_count - 1).max(0);
+                    do_collapse = inner.shell_expand_count == 0;
+                }
+
+                (is_active, if was_loading { Some(do_collapse) } else { None })
+            };
+            // Lock is dropped here — safe to call webview APIs
+
+            if should_position {
                 if let Some(window) = app_handle.get_window("main") {
                     if let Ok(size) = window.inner_size() {
                         let scale = window.scale_factor().unwrap_or(1.0);
@@ -174,17 +190,10 @@ fn create_provider_webview(
                 }
             }
 
-            // Collapse shell if this was the loading provider
-            if inner.currently_loading_id.as_ref() == Some(&provider_id) {
-                inner.currently_loading_id = None;
-                inner.shell_expand_count = (inner.shell_expand_count - 1).max(0);
-
-                // Resize shell back to sidebar width
-                if inner.shell_expand_count == 0 {
-                    drop(inner);
+            if let Some(do_collapse) = should_collapse {
+                if do_collapse {
                     collapse_shell_view(&app_handle);
                 }
-
                 let _ = app_handle.emit_to("shell", "provider-loaded", &provider_id);
             }
         }
@@ -222,17 +231,19 @@ fn start_load_timeout(app: &tauri::AppHandle, provider_id: &str) {
 
         if should_fail {
             let error_msg = format!("Connection timed out after {} seconds", LOAD_TIMEOUT_SECS);
-            {
+
+            // Update state, then drop lock before any UI/emit calls
+            let should_collapse = {
                 let mut inner = state.inner.lock().unwrap();
                 inner.failed_providers.insert(pid.clone(), error_msg.clone());
                 inner.currently_loading_id = None;
-
                 // Balance the refcount: decrement the spinner expand from switch_to_provider()
                 inner.shell_expand_count = (inner.shell_expand_count - 1).max(0);
-                if inner.shell_expand_count == 0 {
-                    drop(inner);
-                    collapse_shell_view(&app_handle);
-                }
+                inner.shell_expand_count == 0
+            };
+
+            if should_collapse {
+                collapse_shell_view(&app_handle);
             }
 
             // Emit loaded to dismiss spinner
@@ -281,47 +292,55 @@ pub fn switch_to_provider(app: &tauri::AppHandle, provider_id: &str) {
     };
 
     // Cancel any pending first-time load spinner for a different provider
-    {
+    let cancel_old_id = {
         let mut inner = state.inner.lock().unwrap();
         if let Some(ref loading_id) = inner.currently_loading_id {
             if loading_id != provider_id {
                 let old_id = loading_id.clone();
                 inner.shell_expand_count = (inner.shell_expand_count - 1).max(0);
-                if inner.shell_expand_count == 0 {
-                    drop(inner);
-                    collapse_shell_view(app);
-                    let mut inner = state.inner.lock().unwrap();
-                    inner.currently_loading_id = None;
-                } else {
-                    inner.currently_loading_id = None;
-                }
-                let _ = app.emit_to("shell", "provider-loaded", &old_id);
+                inner.currently_loading_id = None;
+                Some((old_id, inner.shell_expand_count == 0))
+            } else {
+                None
             }
+        } else {
+            None
         }
+    };
+    // Lock dropped — safe to call webview APIs and emit events
+    if let Some((old_id, should_collapse)) = cancel_old_id {
+        if should_collapse {
+            collapse_shell_view(app);
+        }
+        let _ = app.emit_to("shell", "provider-loaded", &old_id);
     }
 
     // Collapse shell if leaving an errored provider
-    {
+    let should_collapse_error = {
         let mut inner = state.inner.lock().unwrap();
         if let Some(ref active_id) = inner.active_provider_id {
             if inner.failed_providers.contains_key(active_id) {
                 inner.shell_expand_count = (inner.shell_expand_count - 1).max(0);
-                if inner.shell_expand_count == 0 {
-                    drop(inner);
-                    collapse_shell_view(app);
-                }
+                inner.shell_expand_count == 0
+            } else {
+                false
             }
+        } else {
+            false
         }
+    };
+    if should_collapse_error {
+        collapse_shell_view(app);
     }
 
-    // Hide current provider webview
-    {
+    // Hide current provider webview (read state, drop lock, then do UI op)
+    let prev_label = {
         let inner = state.inner.lock().unwrap();
-        if let Some(ref active_id) = inner.active_provider_id {
-            let label = format!("provider-{}", active_id);
-            if let Some(wv) = app.get_webview(&label) {
-                let _ = wv.hide();
-            }
+        inner.active_provider_id.as_ref().map(|id| format!("provider-{}", id))
+    };
+    if let Some(label) = prev_label {
+        if let Some(wv) = app.get_webview(&label) {
+            let _ = wv.hide();
         }
     }
 
@@ -455,9 +474,12 @@ pub fn retry_provider(app: &tauri::AppHandle, provider_id: &str) {
 
     if let Err(e) = create_provider_webview(app, &provider) {
         log::error!("Failed to create provider webview on retry: {}", e);
-        let mut inner = state.inner.lock().unwrap();
-        inner.failed_providers.insert(provider_id.to_string(), e.clone());
-        inner.currently_loading_id = None;
+        {
+            let mut inner = state.inner.lock().unwrap();
+            inner.failed_providers.insert(provider_id.to_string(), e.clone());
+            inner.currently_loading_id = None;
+        }
+        // Lock dropped — safe to emit events
         let _ = app.emit_to("shell", "provider-loaded", provider_id);
         let _ = app.emit_to(
             "shell",
@@ -686,6 +708,11 @@ pub fn collapse_shell(app: &tauri::AppHandle) {
 }
 
 /// Handle window resize — update bounds for shell and active provider.
+///
+/// IMPORTANT: Read state from the mutex first, then drop the lock before
+/// calling any webview APIs. On Windows, webview ops dispatch to the UI
+/// thread — if the UI thread is blocked waiting for this mutex (e.g. a
+/// resize event), we deadlock.
 pub fn handle_resize(app: &tauri::AppHandle) {
     let window = match app.get_window("main") {
         Some(w) => w,
@@ -700,25 +727,27 @@ pub fn handle_resize(app: &tauri::AppHandle) {
         Err(_) => return,
     };
 
-    let state = app.state::<AppState>();
-    let inner = state.inner.lock().unwrap();
+    // Read state, then drop lock BEFORE any webview calls
+    let (shell_expanded, active_label, is_loaded) = {
+        let state = app.state::<AppState>();
+        let inner = state.inner.lock().unwrap();
+        let expanded = inner.shell_expand_count > 0;
+        let label = inner.active_provider_id.as_ref().map(|id| format!("provider-{}", id));
+        let loaded = inner.active_provider_id.as_ref()
+            .map(|id| inner.loaded_providers.contains(id.as_str()))
+            .unwrap_or(false);
+        (expanded, label, loaded)
+    };
+    // Lock is dropped here — safe to call webview APIs
 
-    // Resize shell
     if let Some(shell) = app.get_webview("shell") {
-        let shell_width = if inner.shell_expand_count > 0 {
-            width
-        } else {
-            SIDEBAR_WIDTH
-        };
+        let shell_width = if shell_expanded { width } else { SIDEBAR_WIDTH };
         let _ = shell.set_size(LogicalSize::new(shell_width, height));
     }
 
-    // Resize active provider (skip if still loading — it stays hidden)
-    if let Some(ref active_id) = inner.active_provider_id {
-        let label = format!("provider-{}", active_id);
+    if let Some(label) = active_label {
         if let Some(wv) = app.get_webview(&label) {
-            let is_loading = !inner.loaded_providers.contains(active_id.as_str());
-            if !is_loading {
+            if is_loaded {
                 let _ = wv.set_position(LogicalPosition::new(SIDEBAR_WIDTH, 0.0));
                 let _ = wv.set_size(LogicalSize::new(width - SIDEBAR_WIDTH, height));
             }
@@ -795,28 +824,37 @@ fn expand_shell_view(app: &tauri::AppHandle) {
 }
 
 fn collapse_shell_view(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_window("main") {
-        if let Ok(size) = window.inner_size() {
+    let window = match app.get_window("main") {
+        Some(w) => w,
+        None => return,
+    };
+    let (w, h) = match window.inner_size() {
+        Ok(size) => {
             let scale = window.scale_factor().unwrap_or(1.0);
-            let w = size.width as f64 / scale;
-            let h = size.height as f64 / scale;
-            if let Some(shell) = app.get_webview("shell") {
-                let _ = shell.set_size(LogicalSize::new(SIDEBAR_WIDTH, h));
-            }
+            (size.width as f64 / scale, size.height as f64 / scale)
+        }
+        Err(_) => return,
+    };
 
-            // Restore the active provider webview that was hidden during expand
-            let state = app.state::<AppState>();
-            let inner = state.inner.lock().unwrap();
-            if let Some(ref id) = inner.active_provider_id {
-                if inner.loaded_providers.contains(id) {
-                    let label = format!("provider-{}", id);
-                    if let Some(wv) = app.get_webview(&label) {
-                        let _ = wv.set_position(LogicalPosition::new(SIDEBAR_WIDTH, 0.0));
-                        let _ = wv.set_size(LogicalSize::new(w - SIDEBAR_WIDTH, h));
-                        let _ = wv.show();
-                    }
-                }
-            }
+    // Read state, then drop lock BEFORE webview calls
+    let restore_label = {
+        let state = app.state::<AppState>();
+        let inner = state.inner.lock().unwrap();
+        inner.active_provider_id.as_ref()
+            .filter(|id| inner.loaded_providers.contains(id.as_str()))
+            .map(|id| format!("provider-{}", id))
+    };
+    // Lock is dropped here
+
+    if let Some(shell) = app.get_webview("shell") {
+        let _ = shell.set_size(LogicalSize::new(SIDEBAR_WIDTH, h));
+    }
+
+    if let Some(label) = restore_label {
+        if let Some(wv) = app.get_webview(&label) {
+            let _ = wv.set_position(LogicalPosition::new(SIDEBAR_WIDTH, 0.0));
+            let _ = wv.set_size(LogicalSize::new(w - SIDEBAR_WIDTH, h));
+            let _ = wv.show();
         }
     }
 }
