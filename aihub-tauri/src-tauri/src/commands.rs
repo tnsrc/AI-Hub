@@ -21,7 +21,12 @@ pub fn switch_provider(app: tauri::AppHandle, provider_id: String) {
     if !exists {
         return;
     }
-    provider_manager::switch_to_provider(&app, &provider_id);
+    // Spawn on background thread to avoid WebView2 deadlock on Windows:
+    // switch_to_provider calls emit_to("shell") which blocks if the shell's
+    // JS thread is still waiting for this invoke() to return.
+    std::thread::spawn(move || {
+        provider_manager::switch_to_provider(&app, &provider_id);
+    });
 }
 
 #[tauri::command]
@@ -45,49 +50,57 @@ pub fn retry_provider(app: tauri::AppHandle, provider_id: String) {
     if provider_id.is_empty() {
         return;
     }
-    provider_manager::retry_provider(&app, &provider_id);
+    // Background thread to avoid WebView2 emit_to deadlock (see switch_provider)
+    std::thread::spawn(move || {
+        provider_manager::retry_provider(&app, &provider_id);
+    });
 }
 
 #[tauri::command]
 pub fn clear_session(app: tauri::AppHandle, provider_id: String) {
-    // In Tauri, we can't directly clear cookies like in Electron.
-    // Instead, we destroy and recreate the webview with a fresh data directory.
-    let label = format!("provider-{}", provider_id);
+    // Background thread to avoid WebView2 emit_to deadlock (see switch_provider).
+    // The entire operation runs off-thread because the final switch_to_provider
+    // call emits events back to the shell webview.
+    std::thread::spawn(move || {
+        // In Tauri, we can't directly clear cookies like in Electron.
+        // Instead, we destroy and recreate the webview with a fresh data directory.
+        let label = format!("provider-{}", provider_id);
 
-    // Remove the data directory
-    if let Ok(data_dir) = app.path().app_data_dir() {
-        let provider_data = data_dir.join("providers").join(&provider_id);
-        let _ = std::fs::remove_dir_all(&provider_data);
-    }
+        // Remove the data directory
+        if let Ok(data_dir) = app.path().app_data_dir() {
+            let provider_data = data_dir.join("providers").join(&provider_id);
+            let _ = std::fs::remove_dir_all(&provider_data);
+        }
 
-    // Close existing webview
-    if let Some(wv) = app.get_webview(&label) {
-        let _ = wv.close();
-    }
+        // Close existing webview
+        if let Some(wv) = app.get_webview(&label) {
+            let _ = wv.close();
+        }
 
-    // Remove from loaded set
-    let state = app.state::<AppState>();
-    {
-        let mut inner = state.inner.lock().unwrap();
-        inner.loaded_providers.remove(&provider_id);
-        inner.failed_providers.remove(&provider_id);
-    }
-
-    // If active, re-switch to trigger fresh load
-    let is_active = {
-        let inner = state.inner.lock().unwrap();
-        inner.active_provider_id.as_deref() == Some(provider_id.as_str())
-    };
-    if is_active {
-        // Reset active so switch_to_provider doesn't skip
+        // Remove from loaded set
+        let state = app.state::<AppState>();
         {
             let mut inner = state.inner.lock().unwrap();
-            inner.active_provider_id = None;
+            inner.loaded_providers.remove(&provider_id);
+            inner.failed_providers.remove(&provider_id);
         }
-        provider_manager::switch_to_provider(&app, &provider_id);
-    }
 
-    log::info!("[{}] Session cleared", provider_id);
+        // If active, re-switch to trigger fresh load
+        let is_active = {
+            let inner = state.inner.lock().unwrap();
+            inner.active_provider_id.as_deref() == Some(provider_id.as_str())
+        };
+        if is_active {
+            // Reset active so switch_to_provider doesn't skip
+            {
+                let mut inner = state.inner.lock().unwrap();
+                inner.active_provider_id = None;
+            }
+            provider_manager::switch_to_provider(&app, &provider_id);
+        }
+
+        log::info!("[{}] Session cleared", provider_id);
+    });
 }
 
 #[tauri::command]
