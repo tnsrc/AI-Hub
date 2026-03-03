@@ -1,5 +1,7 @@
 appId: gov.fcc.aihub
 productName: FCC AI Hub
+electronLanguages:
+  - en
 
 directories:
   output: dist
