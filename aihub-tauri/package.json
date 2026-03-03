@@ -8,9 +8,10 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "build:mac": "tauri build",
-    "build:win": "tauri build",
-    "build:debug": "tauri build --debug"
+    "build:mac": "tauri build && npm run copy-bundle",
+    "build:win": "tauri build && npm run copy-bundle",
+    "build:debug": "tauri build --debug",
+    "copy-bundle": "node -e \"const fs=require('fs');const p=require('path');const s=p.join('src-tauri','target','release','bundle');const d='dist';if(fs.existsSync(s)){fs.mkdirSync(d,{recursive:true});(function copy(src,dst){fs.mkdirSync(dst,{recursive:true});for(const e of fs.readdirSync(src,{withFileTypes:true})){const sp=p.join(src,e.name),dp=p.join(dst,e.name);e.isDirectory()?copy(sp,dp):fs.copyFileSync(sp,dp)}})(s,d);console.log('Copied bundle to dist/')}else{console.log('No bundle found at '+s)}\""
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
