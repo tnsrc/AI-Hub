@@ -23,3 +23,9 @@ url = "2"
 log = "0.4"
 open = "5"
 time = "0.3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1

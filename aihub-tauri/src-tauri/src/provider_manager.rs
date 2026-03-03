@@ -226,10 +226,25 @@ fn start_load_timeout(app: &tauri::AppHandle, provider_id: &str) {
                 let mut inner = state.inner.lock().unwrap();
                 inner.failed_providers.insert(pid.clone(), error_msg.clone());
                 inner.currently_loading_id = None;
+
+                // Balance the refcount: decrement the spinner expand from switch_to_provider()
+                inner.shell_expand_count = (inner.shell_expand_count - 1).max(0);
+                if inner.shell_expand_count == 0 {
+                    drop(inner);
+                    collapse_shell_view(&app_handle);
+                }
             }
 
-            // Emit loaded to dismiss spinner, then emit failed to show error
+            // Emit loaded to dismiss spinner
             let _ = app_handle.emit_to("shell", "provider-loaded", &pid);
+
+            // Re-expand for the error overlay, then emit failed
+            {
+                let mut inner = state.inner.lock().unwrap();
+                inner.shell_expand_count += 1;
+            }
+            expand_shell_view(&app_handle);
+
             let _ = app_handle.emit_to(
                 "shell",
                 "provider-load-failed",
@@ -711,13 +726,40 @@ pub fn handle_resize(app: &tauri::AppHandle) {
     }
 }
 
-/// Set up the window resize event handler.
+/// Set up the window resize event handler with 16ms throttle.
 pub fn setup_window_events(app: &tauri::AppHandle) {
+    use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+    use std::time::{Duration, Instant};
+
     let handle = app.clone();
+    let last_resize = Arc::new(Mutex::new(Instant::now() - Duration::from_millis(16)));
+    let deferred_pending = Arc::new(AtomicBool::new(false));
+
     if let Some(window) = app.get_window("main") {
         window.on_window_event(move |event| {
             if let WindowEvent::Resized(_) = event {
-                handle_resize(&handle);
+                let now = Instant::now();
+                let elapsed = {
+                    let last = last_resize.lock().unwrap();
+                    now.duration_since(*last)
+                };
+
+                if elapsed >= Duration::from_millis(16) {
+                    *last_resize.lock().unwrap() = now;
+                    handle_resize(&handle);
+                } else if !deferred_pending.swap(true, Ordering::SeqCst) {
+                    // Schedule a deferred resize so the final position is always applied
+                    let handle2 = handle.clone();
+                    let last2 = Arc::clone(&last_resize);
+                    let pending2 = Arc::clone(&deferred_pending);
+                    let remaining = Duration::from_millis(16) - elapsed;
+                    std::thread::spawn(move || {
+                        std::thread::sleep(remaining);
+                        *last2.lock().unwrap() = Instant::now();
+                        pending2.store(false, Ordering::SeqCst);
+                        handle_resize(&handle2);
+                    });
+                }
             }
         });
     }
