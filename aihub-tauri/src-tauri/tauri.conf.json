@@ -35,7 +35,7 @@
     },
     "windows": {
       "nsis": {
-        "installMode": "perMachine",
+        "installMode": "currentUser",
         "displayLanguageSelector": false,
         "startMenuFolder": "FCC AI Hub"
       }
