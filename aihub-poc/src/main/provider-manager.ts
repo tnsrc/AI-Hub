@@ -552,29 +552,48 @@ export function cycleProvider(direction: 1 | -1): void {
 /**
  * Expand the shell view to cover the full window (for dialogs/settings/spinner).
  * Refcounted so multiple callers (dialog + spinner) can independently expand/collapse.
- * Re-adds the shell view so it renders on top of provider views in z-order.
+ * Hides the active provider view so the shell is visible without z-order changes.
+ * (Removing/re-adding the shell to change z-order can destroy the rendering surface
+ * on Windows, blanking the shell and losing IPC events.)
  */
 export function expandShell(): void {
   if (!mainWindow || !shellView) return
   shellExpandCount++
   if (shellExpandCount === 1) {
     const [width, height] = mainWindow.getContentSize()
-    // Move shell to top of z-order by re-adding it
-    mainWindow.contentView.removeChildView(shellView)
-    mainWindow.contentView.addChildView(shellView)
     shellView.setBounds({ x: 0, y: 0, width, height })
+    // Hide the active provider so it doesn't render on top of the expanded shell
+    if (activeProviderId) {
+      const view = providerViews.get(activeProviderId)
+      if (view) {
+        view.setBounds({ x: -9999, y: -9999, width: 0, height: 0 })
+      }
+    }
   }
 }
 
 /**
  * Collapse the shell view back to sidebar width (if no other expand holds remain).
+ * Restores the active provider view if it was previously loaded.
  */
 export function collapseShell(): void {
   if (!mainWindow || !shellView || shellExpandCount <= 0) return
   shellExpandCount--
   if (shellExpandCount === 0) {
-    const [, height] = mainWindow.getContentSize()
+    const [width, height] = mainWindow.getContentSize()
     shellView.setBounds({ x: 0, y: 0, width: SIDEBAR_WIDTH, height })
+    // Restore the active provider view
+    if (activeProviderId && loadedProviderIds.has(activeProviderId)) {
+      const view = providerViews.get(activeProviderId)
+      if (view) {
+        view.setBounds({
+          x: SIDEBAR_WIDTH,
+          y: 0,
+          width: width - SIDEBAR_WIDTH,
+          height
+        })
+      }
+    }
   }
 }
 
