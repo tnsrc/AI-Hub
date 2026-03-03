@@ -45,5 +45,14 @@ export const BUILT_IN_PROVIDERS: Provider[] = [
     partition: 'persist:provider-claude',
     builtin: true,
     order: 4
+  },
+  {
+    id: 'copilot',
+    name: 'Microsoft Copilot',
+    url: 'https://copilot.microsoft.com/',
+    shortcut: 'CmdOrCtrl+6',
+    partition: 'persist:provider-copilot',
+    builtin: true,
+    order: 5
   }
 ]

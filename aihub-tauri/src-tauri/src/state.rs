@@ -44,13 +44,14 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             theme: "system".into(),
-            hidden_providers: vec!["claude".into()],
+            hidden_providers: vec!["chatgpt".into(), "grok".into(), "claude".into()],
             provider_order: vec![
                 "mca".into(),
                 "chatgpt".into(),
                 "gemini".into(),
                 "grok".into(),
                 "claude".into(),
+                "copilot".into(),
             ],
             url_overrides: std::collections::HashMap::new(),
         }
@@ -161,6 +162,15 @@ pub fn built_in_providers() -> Vec<Provider> {
             builtin: true,
             icon: None,
             order: 4,
+        },
+        Provider {
+            id: "copilot".into(),
+            name: "Microsoft Copilot".into(),
+            url: "https://copilot.microsoft.com/".into(),
+            shortcut: "CmdOrCtrl+6".into(),
+            builtin: true,
+            icon: None,
+            order: 5,
         },
     ]
 }

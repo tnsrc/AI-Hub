@@ -54,6 +54,32 @@ const iconMap: Record<string, React.FC<{ size?: number }>> = {
     </svg>
   ),
 
+  copilot: ({ size = 30 }) => (
+    <svg width={size} height={size} viewBox="0 0 512 510">
+      <defs>
+        <linearGradient id="copilotGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#70C8B8" />
+          <stop offset="50%" stopColor="#5BA4E6" />
+          <stop offset="100%" stopColor="#A87FD4" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M0 115.6C0 52 52 0 115.6 0h280.8C459.9 0 512 52 512 115.6v278.4c0 63.6-52 115.6-115.6 115.6H115.6C52 509.6 0 457.6 0 394V115.6z"
+        fill="#1A1A2E"
+      />
+      <g transform="translate(96, 100) scale(0.625)">
+        <path
+          d="M468.8 210.4c0-67.2-54.4-121.6-121.6-121.6-12 0-23.6 1.6-34.8 4.8C289.6 53.2 247.6 24 198.4 24 131.2 24 76.8 78.4 76.8 145.6c0 6.4.4 12.8 1.2 18.8C32.4 183.6 0 228.8 0 281.6 0 348.8 54.4 403.2 121.6 403.2h225.6c67.2 0 121.6-54.4 121.6-121.6 0-26-8-50-21.6-69.6 13.6-19.6 21.6-43.6 21.6-69.6v68z"
+          fill="url(#copilotGrad1)"
+        />
+        <ellipse cx="192" cy="296" rx="36" ry="44" fill="#1A1A2E" />
+        <ellipse cx="320" cy="296" rx="36" ry="44" fill="#1A1A2E" />
+        <ellipse cx="192" cy="288" rx="20" ry="28" fill="white" />
+        <ellipse cx="320" cy="288" rx="20" ry="28" fill="white" />
+      </g>
+    </svg>
+  ),
+
   grok: ({ size = 30 }) => (
     <svg width={size} height={size} viewBox="0 0 512 509.641">
       <path

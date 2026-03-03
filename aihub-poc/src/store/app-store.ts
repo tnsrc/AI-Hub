@@ -21,7 +21,7 @@ const store = new Store<StoreSchema>({
   defaults: {
     settings: {
       theme: 'system',
-      hiddenProviders: ['claude'],
+      hiddenProviders: ['chatgpt', 'grok', 'claude'],
       providerOrder: BUILT_IN_PROVIDERS.map((p) => p.id)
     },
     customProviders: [],
