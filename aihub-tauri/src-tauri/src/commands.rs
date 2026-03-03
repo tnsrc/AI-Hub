@@ -240,28 +240,34 @@ pub fn shell_ready(app: tauri::AppHandle) {
         return;
     }
 
-    // Load initial provider
-    let store = app.store("fcc-ai-hub.json").expect("failed to access store");
-    let last_active: String = store
-        .get("activeProviderId")
-        .and_then(|v| v.as_str().map(String::from))
-        .unwrap_or_else(|| "mca".into());
+    // Spawn initial provider load on a background thread so that the IPC
+    // response reaches the frontend before any events are emitted back.
+    // On Windows (WebView2), emit_to can block if the target webview's JS
+    // thread is still waiting for the invoke() to return — causing a deadlock.
+    let app_handle = app.clone();
+    std::thread::spawn(move || {
+        let store = app_handle.store("fcc-ai-hub.json").expect("failed to access store");
+        let last_active: String = store
+            .get("activeProviderId")
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_else(|| "mca".into());
 
-    let settings: crate::state::AppSettings = store
-        .get("settings")
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default();
-    let hidden_set: std::collections::HashSet<String> =
-        settings.hidden_providers.into_iter().collect();
+        let settings: crate::state::AppSettings = store
+            .get("settings")
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default();
+        let hidden_set: std::collections::HashSet<String> =
+            settings.hidden_providers.into_iter().collect();
 
-    let providers = provider_manager::get_all_providers(&app);
-    let target = providers
-        .iter()
-        .find(|p| p.id == last_active && !hidden_set.contains(&p.id))
-        .or_else(|| providers.iter().find(|p| !hidden_set.contains(&p.id)));
+        let providers = provider_manager::get_all_providers(&app_handle);
+        let target = providers
+            .iter()
+            .find(|p| p.id == last_active && !hidden_set.contains(&p.id))
+            .or_else(|| providers.iter().find(|p| !hidden_set.contains(&p.id)));
 
-    if let Some(provider) = target {
-        let id = provider.id.clone();
-        provider_manager::switch_to_provider(&app, &id);
-    }
+        if let Some(provider) = target {
+            let id = provider.id.clone();
+            provider_manager::switch_to_provider(&app_handle, &id);
+        }
+    });
 }
