@@ -168,6 +168,7 @@ fn create_provider_webview(
                         if let Some(wv) = app_handle.get_webview(&format!("provider-{}", provider_id)) {
                             let _ = wv.set_position(LogicalPosition::new(SIDEBAR_WIDTH, 0.0));
                             let _ = wv.set_size(LogicalSize::new(w - SIDEBAR_WIDTH, h));
+                            let _ = wv.show();
                         }
                     }
                 }
@@ -189,14 +190,16 @@ fn create_provider_webview(
         }
     });
 
-    // Position off-screen initially
+    // Create hidden — on Windows WebView2, off-screen positioning doesn't work
+    // so we use the proper hide()/show() API for cross-platform visibility control.
     let webview = window
         .add_child(
             builder,
-            LogicalPosition::new(-9999.0, -9999.0),
+            LogicalPosition::new(0.0, 0.0),
             LogicalSize::new(0.0, 0.0),
         )
         .map_err(|e| e.to_string())?;
+    let _ = webview.hide();
 
     Ok(webview)
 }
@@ -302,8 +305,7 @@ pub fn switch_to_provider(app: &tauri::AppHandle, provider_id: &str) {
         if let Some(ref active_id) = inner.active_provider_id {
             let label = format!("provider-{}", active_id);
             if let Some(wv) = app.get_webview(&label) {
-                let _ = wv.set_position(LogicalPosition::new(-9999.0, -9999.0));
-                let _ = wv.set_size(LogicalSize::new(0.0, 0.0));
+                let _ = wv.hide();
             }
         }
     }
@@ -395,6 +397,7 @@ pub fn switch_to_provider(app: &tauri::AppHandle, provider_id: &str) {
             }
             let _ = wv.set_position(LogicalPosition::new(SIDEBAR_WIDTH, 0.0));
             let _ = wv.set_size(LogicalSize::new(width - SIDEBAR_WIDTH, height));
+            let _ = wv.show();
         }
     }
 
@@ -695,15 +698,12 @@ pub fn handle_resize(app: &tauri::AppHandle) {
         let _ = shell.set_size(LogicalSize::new(shell_width, height));
     }
 
-    // Resize active provider
+    // Resize active provider (skip if still loading — it stays hidden)
     if let Some(ref active_id) = inner.active_provider_id {
         let label = format!("provider-{}", active_id);
         if let Some(wv) = app.get_webview(&label) {
             let is_loading = !inner.loaded_providers.contains(active_id.as_str());
-            if is_loading {
-                let _ = wv.set_position(LogicalPosition::new(-9999.0, -9999.0));
-                let _ = wv.set_size(LogicalSize::new(0.0, 0.0));
-            } else {
+            if !is_loading {
                 let _ = wv.set_position(LogicalPosition::new(SIDEBAR_WIDTH, 0.0));
                 let _ = wv.set_size(LogicalSize::new(width - SIDEBAR_WIDTH, height));
             }
@@ -747,8 +747,7 @@ fn expand_shell_view(app: &tauri::AppHandle) {
     if let Some(id) = active_id {
         let label = format!("provider-{}", id);
         if let Some(wv) = app.get_webview(&label) {
-            let _ = wv.set_position(LogicalPosition::new(-9999.0, -9999.0));
-            let _ = wv.set_size(LogicalSize::new(0.0, 0.0));
+            let _ = wv.hide();
         }
     }
 }
@@ -772,6 +771,7 @@ fn collapse_shell_view(app: &tauri::AppHandle) {
                     if let Some(wv) = app.get_webview(&label) {
                         let _ = wv.set_position(LogicalPosition::new(SIDEBAR_WIDTH, 0.0));
                         let _ = wv.set_size(LogicalSize::new(w - SIDEBAR_WIDTH, h));
+                        let _ = wv.show();
                     }
                 }
             }
