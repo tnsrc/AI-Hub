@@ -124,6 +124,8 @@ function createProviderView(provider: Provider): WebContentsView {
       // Cancel any pending loading spinner for this provider
       if (currentlyLoadingId === provider.id) {
         currentlyLoadingId = null
+        // Collapse the spinner expand before expanding for the error overlay
+        collapseShell()
         if (shellView) {
           shellView.webContents.send('provider-loaded', provider.id)
         }
@@ -185,11 +187,12 @@ export function switchToProvider(providerId: string): void {
     collapseShell()
   }
 
-  // Hide current
+  // Hide current and throttle background rendering
   if (activeProviderId) {
     const currentView = providerViews.get(activeProviderId)
     if (currentView) {
       currentView.setBounds({ x: -9999, y: -9999, width: 0, height: 0 })
+      currentView.webContents.setBackgroundThrottling(true)
     }
   }
 
@@ -207,6 +210,9 @@ export function switchToProvider(providerId: string): void {
 
   activeProviderId = providerId
   store.set('activeProviderId', providerId)
+
+  // Restore full rendering for the active view
+  targetView.webContents.setBackgroundThrottling(false)
 
   const previousError = failedProviders.get(providerId)
 
@@ -570,4 +576,11 @@ export function collapseShell(): void {
     const [, height] = mainWindow.getContentSize()
     shellView.setBounds({ x: 0, y: 0, width: SIDEBAR_WIDTH, height })
   }
+}
+
+/**
+ * Returns the set of provider IDs that currently have live views.
+ */
+export function getActiveViewIds(): Set<string> {
+  return new Set(providerViews.keys())
 }

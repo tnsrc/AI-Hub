@@ -1,10 +1,15 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback, Suspense, lazy } from 'react'
 import { useProviderStore } from './hooks/useProviders'
 import { Sidebar } from './components/Sidebar/Sidebar'
-import { AddProviderDialog } from './components/Settings/AddProviderDialog'
-import { SettingsPanel } from './components/Settings/SettingsPanel'
 import { ProviderLoadingSpinner } from './components/ProviderLoadingSpinner'
 import { ProviderErrorMessage } from './components/ProviderErrorMessage'
+
+const AddProviderDialog = lazy(() =>
+  import('./components/Settings/AddProviderDialog').then((m) => ({ default: m.AddProviderDialog }))
+)
+const SettingsPanel = lazy(() =>
+  import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel }))
+)
 
 export function App(): React.ReactElement {
   const {
@@ -129,15 +134,17 @@ export function App(): React.ReactElement {
       <Sidebar />
       <ProviderLoadingSpinner />
       <ProviderErrorMessage />
-      {showAddDialog && (
-        <AddProviderDialog
-          onClose={() => closeDialog('add')}
-          onAdd={handleAddProvider}
-        />
-      )}
-      {showSettings && (
-        <SettingsPanel onClose={() => closeDialog('settings')} />
-      )}
+      <Suspense fallback={null}>
+        {showAddDialog && (
+          <AddProviderDialog
+            onClose={() => closeDialog('add')}
+            onAdd={handleAddProvider}
+          />
+        )}
+        {showSettings && (
+          <SettingsPanel onClose={() => closeDialog('settings')} />
+        )}
+      </Suspense>
     </>
   )
 }

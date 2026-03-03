@@ -57,25 +57,51 @@ const iconMap: Record<string, React.FC<{ size?: number }>> = {
   copilot: ({ size = 30 }) => (
     <svg width={size} height={size} viewBox="0 0 512 510">
       <defs>
-        <linearGradient id="copilotGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#70C8B8" />
-          <stop offset="50%" stopColor="#5BA4E6" />
-          <stop offset="100%" stopColor="#A87FD4" />
-        </linearGradient>
+        <clipPath id="cp_mask">
+          <path d="M0 115.6C0 52 52 0 115.6 0h280.8C459.9 0 512 52 512 115.6v278.4c0 63.6-52 115.6-115.6 115.6H115.6C52 509.6 0 457.6 0 394V115.6z" />
+        </clipPath>
       </defs>
-      <path
-        d="M0 115.6C0 52 52 0 115.6 0h280.8C459.9 0 512 52 512 115.6v278.4c0 63.6-52 115.6-115.6 115.6H115.6C52 509.6 0 457.6 0 394V115.6z"
-        fill="#1A1A2E"
-      />
-      <g transform="translate(96, 100) scale(0.625)">
-        <path
-          d="M468.8 210.4c0-67.2-54.4-121.6-121.6-121.6-12 0-23.6 1.6-34.8 4.8C289.6 53.2 247.6 24 198.4 24 131.2 24 76.8 78.4 76.8 145.6c0 6.4.4 12.8 1.2 18.8C32.4 183.6 0 228.8 0 281.6 0 348.8 54.4 403.2 121.6 403.2h225.6c67.2 0 121.6-54.4 121.6-121.6 0-26-8-50-21.6-69.6 13.6-19.6 21.6-43.6 21.6-69.6v68z"
-          fill="url(#copilotGrad1)"
-        />
-        <ellipse cx="192" cy="296" rx="36" ry="44" fill="#1A1A2E" />
-        <ellipse cx="320" cy="296" rx="36" ry="44" fill="#1A1A2E" />
-        <ellipse cx="192" cy="288" rx="20" ry="28" fill="white" />
-        <ellipse cx="320" cy="288" rx="20" ry="28" fill="white" />
+      <g clipPath="url(#cp_mask)">
+        <rect width="512" height="510" fill="#1A1A2E" />
+        <svg x="35" y="45" width="442" height="420" viewBox="0 23.3 512.1 465.4" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <radialGradient id="cp_a" cx="-79.674" cy="645.551" r="11.637" gradientTransform="matrix(-10.9605 -13.3892 -12.5901 10.3064 7673.291 -7504.614)" gradientUnits="userSpaceOnUse">
+              <stop offset=".096" stopColor="#00aeff" />
+              <stop offset=".773" stopColor="#2253ce" />
+              <stop offset="1" stopColor="#0736c4" />
+            </radialGradient>
+            <radialGradient id="cp_b" cx="-20.581" cy="641.788" r="11.637" gradientTransform="matrix(9.8803 12.5737 12.1968 -9.5842 -7518.271 6768.395)" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#ffb657" />
+              <stop offset=".634" stopColor="#ff5f3d" />
+              <stop offset=".923" stopColor="#c02b3c" />
+            </radialGradient>
+            <linearGradient id="cp_c" x1="151.476" x2="178.106" y1="452.543" y2="144.451" gradientTransform="matrix(1 0 0 -1 0 514)" gradientUnits="userSpaceOnUse">
+              <stop offset=".156" stopColor="#0d91e1" />
+              <stop offset=".487" stopColor="#52b471" />
+              <stop offset=".652" stopColor="#98bd42" />
+              <stop offset=".937" stopColor="#ffc800" />
+            </linearGradient>
+            <linearGradient id="cp_d" x1="154.129" x2="168.669" y1="491.116" y2="155.012" gradientTransform="matrix(1 0 0 -1 0 514)" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#3dcbff" />
+              <stop offset=".247" stopColor="#0588f7" stopOpacity={0} />
+            </linearGradient>
+            <radialGradient id="cp_e" cx="-46.943" cy="664.318" r="11.637" gradientTransform="matrix(-12.6711 36.2357 43.4092 15.1796 -28974.764 -8263.428)" gradientUnits="userSpaceOnUse">
+              <stop offset=".066" stopColor="#8c48ff" />
+              <stop offset=".5" stopColor="#f2598a" />
+              <stop offset=".896" stopColor="#ffb152" />
+            </radialGradient>
+            <linearGradient id="cp_f" x1="352.459" x2="352.268" y1="382.231" y2="290.663" gradientTransform="matrix(1 0 0 -1 0 514)" gradientUnits="userSpaceOnUse">
+              <stop offset=".058" stopColor="#f8adfa" />
+              <stop offset=".708" stopColor="#a86edd" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <path d="M374 62c-6.7-22.9-27.8-38.7-51.7-38.7h-15.7c-26 0-48.3 18.6-53 44.2l-26.9 146.8 6.7-22.9c6.7-23 27.8-38.8 51.7-38.8h91.4l38.3 14.9 36.9-14.9H441c-23.9 0-45-15.8-51.7-38.7z" fill="url(#cp_a)" />
+          <path d="M143.5 449.8c6.7 23 27.8 38.9 51.8 38.9h33.4c29.2 0 53.1-23.3 53.9-52.5l3.6-141.5-7.6 26c-6.7 23-27.8 38.7-51.7 38.7h-92.2l-32.9-17.8-35.6 17.8h10.6c24 0 45.1 15.9 51.8 38.9z" fill="url(#cp_b)" />
+          <path d="M320 23.3H133.4C80 23.3 48 93.7 26.7 164.2 1.4 247.7-31.6 359.4 64 359.4h80.6c24.1 0 45.2-15.9 51.8-39.1 14-49 38.6-134.5 57.9-199.6 9.8-33.1 18-61.5 30.5-79.2 7.1-9.9 18.8-18.2 35.2-18.2" fill="url(#cp_c)" />
+          <path d="M320 23.3H133.4C80 23.3 48 93.7 26.7 164.2 1.4 247.7-31.6 359.4 64 359.4h80.6c24.1 0 45.2-15.9 51.8-39.1 14-49 38.6-134.5 57.9-199.6 9.8-33.1 18-61.5 30.5-79.2 7.1-9.9 18.8-18.2 35.2-18.2" fill="url(#cp_d)" />
+          <path d="M192 488.7h186.7c53.3 0 85.3-70.5 106.7-141 25.3-83.5 58.3-195.2-37.3-195.2h-80.6c-24.1 0-45.2 15.9-51.8 39.1-14 49-38.6 134.6-57.9 199.7-9.8 33.1-18 61.5-30.5 79.2-7.2 9.9-18.9 18.2-35.3 18.2" fill="url(#cp_e)" />
+          <path d="M192 488.7h186.7c53.3 0 85.3-70.5 106.7-141 25.3-83.5 58.3-195.2-37.3-195.2h-80.6c-24.1 0-45.2 15.9-51.8 39.1-14 49-38.6 134.6-57.9 199.7-9.8 33.1-18 61.5-30.5 79.2-7.2 9.9-18.9 18.2-35.3 18.2" fill="url(#cp_f)" />
+        </svg>
       </g>
     </svg>
   ),

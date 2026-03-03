@@ -8,12 +8,33 @@ import {
   setShellView,
   switchToProvider,
   handleResize,
-  getAllProviders
+  getAllProviders,
+  getActiveViewIds
 } from './provider-manager'
 import { persistSessionCookies } from './session-manager'
 import { buildMenu } from './menu-builder'
 import { registerIPC, setShellReadyCallback } from './ipc-handlers'
 import { createTray } from './tray'
+
+function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  return ((...args: unknown[]) => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => fn(...args), ms)
+  }) as unknown as T
+}
+
+function throttle<T extends (...args: unknown[]) => void>(fn: T, ms: number): T {
+  let pending = false
+  return ((...args: unknown[]) => {
+    if (pending) return
+    pending = true
+    setTimeout(() => {
+      fn(...args)
+      pending = false
+    }, ms)
+  }) as unknown as T
+}
 
 app.setName(APP_NAME)
 
@@ -44,8 +65,8 @@ function createWindow(): BaseWindow {
     mainWindow.maximize()
   }
 
-  // Save window state on move/resize
-  const saveWindowState = (): void => {
+  // Save window state on move/resize (debounced to avoid excessive disk writes)
+  const saveWindowState = debounce((): void => {
     if (mainWindow.isMaximized()) {
       store.set('windowState.isMaximized', true)
     } else {
@@ -58,7 +79,7 @@ function createWindow(): BaseWindow {
         isMaximized: false
       })
     }
-  }
+  }, 400)
 
   mainWindow.on('resize', saveWindowState)
   mainWindow.on('move', saveWindowState)
@@ -92,8 +113,9 @@ app.whenReady().then(() => {
     shellView.webContents.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // Handle resize
-  mainWindow.on('resize', handleResize)
+  // Handle resize (throttled to reduce redundant setBounds calls)
+  const throttledResize = throttle(handleResize, 16)
+  mainWindow.on('resize', throttledResize)
 
   // Build menu, register IPC, create tray
   buildMenu()
@@ -120,7 +142,10 @@ app.on('before-quit', async (e) => {
     const timeout = new Promise<void>((_, reject) =>
       setTimeout(() => reject(new Error('Cookie persist timeout')), 3000)
     )
-    await Promise.race([persistSessionCookies(getAllProviders()), timeout])
+    await Promise.race([
+      persistSessionCookies(getAllProviders(), getActiveViewIds()),
+      timeout
+    ])
   } catch (err) {
     console.error('Failed to persist cookies before quit:', err)
   } finally {
