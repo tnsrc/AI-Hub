@@ -24,24 +24,34 @@ export function App(): React.ReactElement {
   const errorExpandedRef = useRef(false)
 
   const openDialog = useCallback(async (which: 'add' | 'settings') => {
-    document.body.classList.add('shell-expanded')
     dialogOpenRef.current = true
     await aihub.expandShell()
     // Wait for the native webview resize to propagate to the HTML viewport.
     // expandShell() returns before the browser layout updates, so the dialog
     // would render inside the old 52px-wide viewport without this wait.
+    // Use both a resize listener AND polling — on Windows (WebView2) the resize
+    // event can be delayed or missed entirely.
     await new Promise<void>((resolve) => {
-      if (window.innerWidth > 100) { resolve(); return }
-      const onResize = (): void => {
-        if (window.innerWidth > 100) {
-          window.removeEventListener('resize', onResize)
-          resolve()
-        }
+      const isWide = (): boolean => window.innerWidth > 100
+      if (isWide()) { resolve(); return }
+      let done = false
+      const finish = (): void => {
+        if (done) return
+        done = true
+        window.removeEventListener('resize', onResize)
+        clearInterval(poll)
+        resolve()
       }
+      const onResize = (): void => { if (isWide()) finish() }
       window.addEventListener('resize', onResize)
-      // Safety timeout in case the resize event was missed
-      setTimeout(() => { window.removeEventListener('resize', onResize); resolve() }, 300)
+      // Poll every 50ms — catches resize on platforms where the event is delayed
+      const poll = setInterval(() => { if (isWide()) finish() }, 50)
+      // Safety ceiling so we never hang indefinitely
+      setTimeout(finish, 2000)
     })
+    // Only hide sidebar AFTER shell is confirmed wide — avoids blank screen
+    // if expansion is slow (Windows) or fails entirely.
+    document.body.classList.add('shell-expanded')
     if (which === 'add') setShowAddDialog(true)
     else setShowSettings(true)
   }, [])

@@ -47,10 +47,19 @@ pub fn run() {
                 .build()?;
 
             // Add shell webview (loads our React sidebar)
+            // Use actual inner size rather than hardcoded 900 — on Windows the menu
+            // bar reduces the client area so 900 would overshoot the visible region.
+            let shell_height = window
+                .inner_size()
+                .map(|s| {
+                    let scale = window.scale_factor().unwrap_or(1.0);
+                    s.height as f64 / scale
+                })
+                .unwrap_or(900.0);
             let _shell = window.add_child(
                 WebviewBuilder::new("shell", WebviewUrl::App(Default::default())),
                 LogicalPosition::new(0.0, 0.0),
-                LogicalSize::new(state::SIDEBAR_WIDTH, 900.0),
+                LogicalSize::new(state::SIDEBAR_WIDTH, shell_height),
             )?;
 
             // Apply saved theme to native window
@@ -64,6 +73,11 @@ pub fn run() {
 
             // Create system tray
             tray::create_tray(app.handle())?;
+
+            // Force an initial resize pass so the shell webview gets the correct
+            // bounds even if the platform doesn't fire a Resized event at startup
+            // (observed on Windows where the menu bar reduces the client area).
+            provider_manager::handle_resize(app.handle());
 
             Ok(())
         })
