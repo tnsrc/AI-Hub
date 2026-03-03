@@ -1,6 +1,5 @@
 import { app, BaseWindow, WebContentsView, nativeImage } from 'electron'
 import { join } from 'path'
-import { is } from '@electron-toolkit/utils'
 import { APP_NAME, SIDEBAR_WIDTH } from '../shared/constants'
 import store from '../store/app-store'
 import {
@@ -107,7 +106,7 @@ app.whenReady().then(() => {
   setShellView(shellView)
 
   // Load shell UI
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     shellView.webContents.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     shellView.webContents.loadFile(join(__dirname, '../renderer/index.html'))
