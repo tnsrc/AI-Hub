@@ -1,7 +1,7 @@
 use crate::state::{AppSettings, AppState, Provider, ProviderState, SIDEBAR_WIDTH, built_in_providers};
 use serde_json::Value;
 use tauri::{
-    webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder},
+    webview::{Color, NewWindowResponse, PageLoadEvent, WebviewBuilder},
     Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl, WindowEvent,
 };
 use tauri_plugin_store::StoreExt;
@@ -114,10 +114,18 @@ fn create_provider_webview(
     #[cfg(target_os = "linux")]
     let user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15";
 
+    // Set WebView2's default background to match the shell's --bg so the
+    // brief frame before content composites shows dark instead of white.
+    let bg_color = match load_settings(app).theme.as_str() {
+        "light" => Color(0xf5, 0xf5, 0xf7, 0xff),
+        _ => Color(0x1e, 0x20, 0x24, 0xff),
+    };
+
     let builder = WebviewBuilder::new(
         format!("provider-{}", provider.id),
         WebviewUrl::External(url),
     )
+    .background_color(bg_color)
     .data_directory(data_dir)
     .user_agent(user_agent)
     .on_new_window(|url, _features| {
@@ -684,6 +692,27 @@ pub fn cycle_provider(app: &tauri::AppHandle, direction: i32) {
         % visible.len() as i32;
     let target_id = visible[next as usize].id.clone();
     switch_to_provider(app, &target_id);
+}
+
+/// Update background color of all existing provider webviews on theme change.
+pub fn update_provider_backgrounds(app: &tauri::AppHandle, theme: &str) {
+    let bg = match theme {
+        "light" => Color(0xf5, 0xf5, 0xf7, 0xff),
+        _ => Color(0x1e, 0x20, 0x24, 0xff),
+    };
+    let labels: Vec<String> = {
+        let state = app.state::<AppState>();
+        let inner = state.inner.lock().unwrap();
+        get_all_providers(app)
+            .iter()
+            .map(|p| format!("provider-{}", p.id))
+            .collect()
+    };
+    for label in labels {
+        if let Some(wv) = app.get_webview(&label) {
+            let _ = wv.set_background_color(Some(bg));
+        }
+    }
 }
 
 /// Expand the shell view to full window.

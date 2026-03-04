@@ -173,6 +173,8 @@ pub fn update_settings(app: tauri::AppHandle, settings: Value) {
             current.theme = theme.clone();
             // Also update the native window theme (title bar, window background)
             crate::set_native_window_theme(&app, theme.as_str());
+            // Update all loaded provider webviews' background color to match
+            provider_manager::update_provider_backgrounds(&app, theme.as_str());
         }
     }
 
