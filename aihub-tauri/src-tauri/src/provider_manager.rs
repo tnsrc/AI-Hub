@@ -176,17 +176,9 @@ fn create_provider_webview(
             // Lock is dropped here — safe to call webview APIs
 
             if should_position {
-                if let Some(window) = app_handle.get_window("main") {
-                    if let Ok(size) = window.inner_size() {
-                        let scale = window.scale_factor().unwrap_or(1.0);
-                        let w = size.width as f64 / scale;
-                        let h = size.height as f64 / scale;
-                        if let Some(wv) = app_handle.get_webview(&format!("provider-{}", provider_id)) {
-                            let _ = wv.set_position(LogicalPosition::new(SIDEBAR_WIDTH, 0.0));
-                            let _ = wv.set_size(LogicalSize::new(w - SIDEBAR_WIDTH, h));
-                            let _ = wv.show();
-                        }
-                    }
+                // Webview was created at the correct size — just show it.
+                if let Some(wv) = app_handle.get_webview(&format!("provider-{}", provider_id)) {
+                    let _ = wv.show();
                 }
             }
 
@@ -199,13 +191,25 @@ fn create_provider_webview(
         }
     });
 
-    // Create hidden — on Windows WebView2, off-screen positioning doesn't work
-    // so we use the proper hide()/show() API for cross-platform visibility control.
+    // Create at the correct content-area size so the page loads and paints at
+    // full size. This eliminates the white flash that occurs when a (0,0)-sized
+    // webview is resized on show — WebView2 briefly shows its default background
+    // before the page repaints at the new size.
+    let (content_x, content_w, content_h) = window
+        .inner_size()
+        .map(|s| {
+            let scale = window.scale_factor().unwrap_or(1.0);
+            let w = s.width as f64 / scale;
+            let h = s.height as f64 / scale;
+            (SIDEBAR_WIDTH, w - SIDEBAR_WIDTH, h)
+        })
+        .unwrap_or((SIDEBAR_WIDTH, 1400.0 - SIDEBAR_WIDTH, 900.0));
+
     let webview = window
         .add_child(
             builder,
-            LogicalPosition::new(0.0, 0.0),
-            LogicalSize::new(0.0, 0.0),
+            LogicalPosition::new(content_x, 0.0),
+            LogicalSize::new(content_w, content_h),
         )
         .map_err(|e| e.to_string())?;
     let _ = webview.hide();
@@ -728,21 +732,20 @@ pub fn handle_resize(app: &tauri::AppHandle) {
     };
 
     // Read state, then drop lock BEFORE any webview calls
-    let (shell_expanded, active_label, is_loaded) = {
+    let (active_label, is_loaded) = {
         let state = app.state::<AppState>();
         let inner = state.inner.lock().unwrap();
-        let expanded = inner.shell_expand_count > 0;
         let label = inner.active_provider_id.as_ref().map(|id| format!("provider-{}", id));
         let loaded = inner.active_provider_id.as_ref()
             .map(|id| inner.loaded_providers.contains(id.as_str()))
             .unwrap_or(false);
-        (expanded, label, loaded)
+        (label, loaded)
     };
     // Lock is dropped here — safe to call webview APIs
 
     if let Some(shell) = app.get_webview("shell") {
-        let shell_width = if shell_expanded { width } else { SIDEBAR_WIDTH };
-        let _ = shell.set_size(LogicalSize::new(shell_width, height));
+        // Shell is always full-width (provider webviews cover the content area)
+        let _ = shell.set_size(LogicalSize::new(width, height));
     }
 
     if let Some(label) = active_label {
@@ -797,19 +800,8 @@ pub fn setup_window_events(app: &tauri::AppHandle) {
 // --- Internal helpers ---
 
 fn expand_shell_view(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_window("main") {
-        if let Ok(size) = window.inner_size() {
-            let scale = window.scale_factor().unwrap_or(1.0);
-            let w = size.width as f64 / scale;
-            let h = size.height as f64 / scale;
-            if let Some(shell) = app.get_webview("shell") {
-                let _ = shell.set_size(LogicalSize::new(w, h));
-            }
-        }
-    }
-
-    // Hide the active provider webview so it doesn't render on top of the expanded shell.
-    // Provider webviews are added after the shell as child views, so they have higher z-order.
+    // Shell is always full-width — just hide the active provider webview
+    // so the shell (with spinner/error overlay) shows through.
     let state = app.state::<AppState>();
     let active_id = {
         let inner = state.inner.lock().unwrap();
@@ -824,6 +816,7 @@ fn expand_shell_view(app: &tauri::AppHandle) {
 }
 
 fn collapse_shell_view(app: &tauri::AppHandle) {
+    // Shell stays full-width — just restore the active provider webview on top.
     let window = match app.get_window("main") {
         Some(w) => w,
         None => return,
@@ -844,11 +837,6 @@ fn collapse_shell_view(app: &tauri::AppHandle) {
             .filter(|id| inner.loaded_providers.contains(id.as_str()))
             .map(|id| format!("provider-{}", id))
     };
-    // Lock is dropped here
-
-    if let Some(shell) = app.get_webview("shell") {
-        let _ = shell.set_size(LogicalSize::new(SIDEBAR_WIDTH, h));
-    }
 
     if let Some(label) = restore_label {
         if let Some(wv) = app.get_webview(&label) {

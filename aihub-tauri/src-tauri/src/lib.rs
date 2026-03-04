@@ -46,20 +46,22 @@ pub fn run() {
                 .min_inner_size(800.0, 600.0)
                 .build()?;
 
-            // Add shell webview (loads our React sidebar)
-            // Use actual inner size rather than hardcoded 900 — on Windows the menu
-            // bar reduces the client area so 900 would overshoot the visible region.
-            let shell_height = window
+            // Add shell webview at full window size.
+            // The shell is always full-width so its dark background (var(--bg))
+            // is pre-painted behind provider webviews. This eliminates the white
+            // flash that occurred when resizing the shell from sidebar-width to
+            // full-width on Windows (WebView2 re-paint lag).
+            let (shell_width, shell_height) = window
                 .inner_size()
                 .map(|s| {
                     let scale = window.scale_factor().unwrap_or(1.0);
-                    s.height as f64 / scale
+                    (s.width as f64 / scale, s.height as f64 / scale)
                 })
-                .unwrap_or(900.0);
+                .unwrap_or((1400.0, 900.0));
             let _shell = window.add_child(
                 WebviewBuilder::new("shell", WebviewUrl::App(Default::default())),
                 LogicalPosition::new(0.0, 0.0),
-                LogicalSize::new(state::SIDEBAR_WIDTH, shell_height),
+                LogicalSize::new(shell_width, shell_height),
             )?;
 
             // Apply saved theme to native window
